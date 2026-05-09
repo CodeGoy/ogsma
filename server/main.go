@@ -20,11 +20,12 @@ var (
 )
 
 type Config struct {
-	Port     int      `json:"port"`
-	Endpoint string   `json:"endpoint"`
-	CertFile string   `json:"certFile"`
-	KeyFile  string   `json:"keyFile"`
-	Users    []string `json:"users"`
+	Port      int      `json:"port"`
+	Endpoint  string   `json:"endpoint"`
+	CertFile  string   `json:"certFile"`
+	KeyFile   string   `json:"keyFile"`
+	Users     []string `json:"users"`
+	ServerKey string   `json:"serverkey"`
 }
 
 type Server struct {
@@ -36,6 +37,8 @@ type Server struct {
 	key          string
 	upgrader     websocket.Upgrader
 	users        []string
+	serverKey    string
+	enc          *Encryption
 }
 
 type MessageTemplate struct {
@@ -47,6 +50,10 @@ func (s *Server) oc() func(r *http.Request) bool {
 	return func(r *http.Request) bool {
 		return true
 	}
+}
+
+func (s *Server) processMessage(msg []byte) ([]byte, error) {
+	return s.enc.passwordDecrypt(msg, s.serverKey)
 }
 
 func (s *Server) start() {
@@ -76,17 +83,21 @@ func (s *Server) start() {
 			log.Printf("Error reading init message: %v\n", err)
 			return
 		}
+		// handle init message // TODO : decrypt
 		if pmt == websocket.BinaryMessage {
 			prs := struct {
 				ID string `json:"id"`
 			}{}
-			if err := json.Unmarshal(pm, &prs); err != nil {
+			decryptedInitMsg, err := s.enc.passwordDecrypt(pm, s.serverKey)
+			if err != nil {
+				log.Printf("Error decrypting init message: %v\n", err)
+			}
+			if err := json.Unmarshal(decryptedInitMsg, &prs); err != nil {
 				log.Printf("Error parsing init message: %v\n", err)
 			}
 			if len(prs.ID) != 64 {
 				return
 			}
-			// TODO : check if id is in s.users
 			if !slices.Contains(s.users, prs.ID) {
 				log.Printf("User %s not found in USERS\n", prs.ID)
 				return
@@ -98,7 +109,6 @@ func (s *Server) start() {
 			log.Printf("Error parsing init message: %v\n", string(pm))
 			return
 		}
-
 		websocketTimeout := time.Now()
 		c.SetPingHandler(func(m string) error {
 			websocketTimeout = time.Now()
@@ -135,8 +145,13 @@ func (s *Server) start() {
 			}
 			switch messageType {
 			case websocket.TextMessage:
+				decryptedMsg, err := s.enc.passwordDecrypt(message, s.serverKey)
+				if err != nil {
+					log.Printf("Error decrypting message: %v\n", err)
+					return
+				}
 				mt := &MessageTemplate{}
-				if err := json.Unmarshal(message, mt); err != nil {
+				if err := json.Unmarshal(decryptedMsg, mt); err != nil {
 					log.Printf("Error parsing message: %v\n", err)
 					return
 				}
@@ -165,11 +180,15 @@ func main() {
 		log.Fatalf("Error parsing config file: %v\n", err)
 	}
 	s := &Server{
-		endpoint: c.Endpoint,
-		tlsPort:  c.Port,
-		cert:     c.CertFile,
-		key:      c.KeyFile,
-		users:    c.Users,
+		enc: &Encryption{
+			iter: 100000,
+		},
+		serverKey: c.ServerKey,
+		endpoint:  c.Endpoint,
+		tlsPort:   c.Port,
+		cert:      c.CertFile,
+		key:       c.KeyFile,
+		users:     c.Users,
 	}
 	s.websockets = make(map[string]*websocket.Conn)
 	s.messageQueue = make(map[string][][]byte)

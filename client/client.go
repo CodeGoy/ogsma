@@ -18,13 +18,8 @@ type Client struct {
 	SelfSigned  bool // SelfSigned Disables checking CA store for cert
 	wsPath      string
 	MessageChan chan []byte
-}
-
-type Msg struct {
-	ID        string    `json:"id"`
-	Message   []byte    `json:"msg"`
-	TimeStamp time.Time `json:"timestamp"`
-	FromID    string    `json:"from"`
+	serverKey   string
+	enc         *Encryption
 }
 
 func (c *Client) Connect() error {
@@ -48,7 +43,11 @@ func (c *Client) Connect() error {
 	if err != nil {
 		return fmt.Errorf("error: json marshal: %v", err)
 	}
-	if err = c.Conn.WriteMessage(websocket.BinaryMessage, loginJson); err != nil {
+	encryptedInitMsg, err := c.enc.passwordEncrypt(loginJson, c.serverKey)
+	if err != nil {
+		return fmt.Errorf("error: encrypt init: %v", err)
+	}
+	if err = c.Conn.WriteMessage(websocket.BinaryMessage, encryptedInitMsg); err != nil {
 		return fmt.Errorf("write %v", err)
 	}
 	fmt.Println("connected")
@@ -66,7 +65,12 @@ func (c *Client) listener() {
 			}
 			switch mt {
 			case websocket.TextMessage:
-				c.MessageChan <- message
+				decryptedMsg, err := c.enc.passwordDecrypt(message, c.serverKey)
+				if err != nil {
+					log.Printf("error: decrypt error: %v", err)
+					break
+				}
+				c.MessageChan <- decryptedMsg
 			}
 		}
 	}()
@@ -94,11 +98,7 @@ func (c *Client) KeepAlive() {
 	}()
 }
 
-func (c *Client) SendMsg(msg *Msg) error {
-	jm, err := json.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("error: json marshal: %v", err)
-	}
+func (c *Client) SendMsg(jm []byte) error {
 	return c.Conn.WriteMessage(websocket.TextMessage, jm)
 }
 

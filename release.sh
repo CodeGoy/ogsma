@@ -5,6 +5,7 @@ addr="10.1.10.194"
 port="8443"
 names=("chad" "stacy" "john" "jane" "scott")
 passwords=("password1234!" "password1234!" "password1234!" "password1234!" "password1234!")
+serverKey="Yd7OH1x6v53HSlantzjQFdWyx5GogR5v"
 cert="./certs/selfsigned.crt"
 key="./certs/selfsigned.key"
 
@@ -45,12 +46,12 @@ for (( i=0; i<num_names; i++ )); do
   targetName="${names[$i]}"
   keystoreString=$(cat "${targetName}.keystore")
   echo "generating config.json file for: ${targetName}"
-  ./config_gen/config_gen --type client --keystore "${keystoreString}" --port "${port}" --addr "${addr}" --endpoint "${wsEndpoint}" --opf "${targetName}_config.json"
+  ./config_gen/config_gen --type client --keystore "${keystoreString}" --port "${port}" --addr "${addr}" --endpoint "${wsEndpoint}" --sk "${serverKey}" --opf "${targetName}_config.json"
 done
 
 # generate server config file
 echo "generating server config for clients: ${clients::-1}"
-./config_gen/config_gen --type server --port "${port}" --endpoint "${wsEndpoint}" --cert "${cert}" --key "${key}" --opf "server_config.json" --ukfs "${clients::-1}"
+./config_gen/config_gen --type server --port "${port}" --endpoint "${wsEndpoint}" --cert "${cert}" --key "${key}" --opf "server_config.json" --sk "${serverKey}" --ukfs "${clients::-1}"
 
 # remove temp files
 rm ./*.keyshare

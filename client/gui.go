@@ -22,6 +22,7 @@ type GUI struct {
 	scrollContainer map[string]*container.Scroll
 	client          *Client
 	enc             *Encryption
+	serverKey       string
 }
 
 func (g *GUI) loginWindow() {
@@ -54,7 +55,7 @@ func (g *GUI) loginWindow() {
 	////////////
 	loginButton := widget.NewButton("Login", login)
 	content := container.NewVBox(
-		widget.NewLabel("Please log in"),
+		widget.NewLabel(fmt.Sprintf("Hello %s, Please log in")),
 		passEntry,
 		loginButton,
 		messageLabel,
@@ -87,6 +88,13 @@ func (g *GUI) contactsWindow() {
 	}
 }
 
+type Msg struct {
+	ID        string    `json:"id"`
+	Message   []byte    `json:"msg"`
+	TimeStamp time.Time `json:"timestamp"`
+	FromID    string    `json:"from"`
+}
+
 func (g *GUI) chatWindow(contact *Contact) {
 	g.window.SetTitle("messaging")
 	msgEntry := widget.NewEntry()
@@ -97,19 +105,29 @@ func (g *GUI) chatWindow(contact *Contact) {
 				log.Println(err)
 				return
 			}
-			// TODO : resend if fail
-			if err := g.client.SendMsg(&Msg{
+			jm, err := json.Marshal(&Msg{
 				ID:        g.client.targetID,
 				TimeStamp: time.Now(),
 				Message:   targetPublicKeyEncryptedBytes,
 				FromID:    g.client.ID,
-			}); err != nil {
+			})
+			if err != nil {
+				log.Printf("error: json marshal: %v", err)
+				return
+			}
+			encryptedMessage, err := g.enc.passwordEncrypt(jm, g.serverKey)
+			if err != nil {
+				log.Printf("error: json encrypt: %v", err)
+				return
+			}
+			if err := g.client.SendMsg(encryptedMessage); err != nil {
 				log.Println(err)
 				g.appendText("Error:", err.Error(), contact.ID)
 				if err := g.client.Connect(); err != nil {
 					g.appendText("Error:", "Failed to reconnect to server", contact.ID)
 					g.appendText("Error:", err.Error(), contact.ID)
 					time.Sleep(5 * time.Second)
+					// TODO : fix this
 					os.Exit(1)
 				}
 			}
@@ -142,12 +160,22 @@ func (g *GUI) chatTab(contact *Contact) *fyne.Container {
 			retry := 0
 			for {
 				retry++
-				if err := g.client.SendMsg(&Msg{
-					ID:        contact.ID,
+				jm, err := json.Marshal(&Msg{
+					ID:        g.client.targetID,
 					TimeStamp: time.Now(),
 					Message:   targetPublicKeyEncryptedBytes,
 					FromID:    g.client.ID,
-				}); err == nil {
+				})
+				if err != nil {
+					log.Printf("error: json marshal: %v", err)
+					return
+				}
+				encryptedMessage, err := g.enc.passwordEncrypt(jm, g.serverKey)
+				if err != nil {
+					log.Printf("error: json encrypt: %v", err)
+					return
+				}
+				if err := g.client.SendMsg(encryptedMessage); err == nil {
 					break
 				}
 				if retry > 16 {

@@ -24,9 +24,10 @@ type QueueMessage struct {
 }
 
 type Config struct {
-	Addr     string `json:"addr"`
-	KeyStore string `json:"keystore"`
-	Endpoint string `json:"endpoint"`
+	Addr      string `json:"addr"`
+	KeyStore  string `json:"keystore"`
+	Endpoint  string `json:"endpoint"`
+	ServerKey string `json:"serverkey"`
 }
 
 func main() {
@@ -36,6 +37,7 @@ func main() {
 		log.Fatalf("Error parsing config file: %v\n", err)
 	}
 	g := &GUI{
+		serverKey:       c.ServerKey,
 		scrollContainer: make(map[string]*container.Scroll),
 		chatOutput:      make(map[string]*widget.RichText),
 		enc: &Encryption{
@@ -47,10 +49,12 @@ func main() {
 			Addr:        c.Addr,
 			wsPath:      c.Endpoint,
 			MessageChan: make(chan []byte),
+			serverKey:   c.ServerKey,
 		},
 		app:  app.New(),
 		tabs: false,
 	}
+	g.client.enc = g.enc
 	g.window = g.app.NewWindow("Login")
 	g.window.SetMaster()
 	platformDo(g)

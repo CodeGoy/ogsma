@@ -10,22 +10,25 @@ import (
 )
 
 type ClientConfig struct {
-	Addr     string `json:"addr"`
-	KeyStore string `json:"keystore"`
-	Endpoint string `json:"endpoint"`
+	Addr      string `json:"addr"`
+	KeyStore  string `json:"keystore"`
+	Endpoint  string `json:"endpoint"`
+	ServerKey string `json:"serverkey"`
 }
 
 type ServerConfig struct {
-	Port     int      `json:"port"`
-	Endpoint string   `json:"endpoint"`
-	CertFile string   `json:"certFile"`
-	KeyFile  string   `json:"keyFile"`
-	Users    []string `json:"users"`
+	Port      int      `json:"port"`
+	Endpoint  string   `json:"endpoint"`
+	CertFile  string   `json:"certFile"`
+	KeyFile   string   `json:"keyFile"`
+	Users     []string `json:"users"`
+	ServerKey string   `json:"serverkey"`
 }
 
 func main() {
-	var ep, ks, addr, cert, key, tp, opf, ukfs string
+	var ep, ks, addr, cert, key, tp, opf, ukfs, sk string
 	var port int
+	flag.StringVar(&sk, "sk", "", "server encryption key")
 	flag.StringVar(&ukfs, "ukfs", "", "comma-separated list of user keystore files")
 	flag.StringVar(&opf, "opf", "config.json", "output file for client config")
 	flag.StringVar(&tp, "type", "", "type of config (client, server)")
@@ -36,6 +39,8 @@ func main() {
 	flag.StringVar(&addr, "addr", "10.1.10.194", "address of server (10.1.10.194)")
 	flag.IntVar(&port, "port", 0, "server port")
 	flag.Parse()
+	// TODO : nil checking of relevant vars
+
 	if port == 0 {
 		log.Fatal("port number required")
 		return
@@ -43,9 +48,10 @@ func main() {
 	switch tp {
 	case "client":
 		if cjb, err := json.Marshal(&ClientConfig{
-			Addr:     fmt.Sprintf("%s:%d", addr, port),
-			KeyStore: ks,
-			Endpoint: ep,
+			Addr:      fmt.Sprintf("%s:%d", addr, port),
+			KeyStore:  ks,
+			Endpoint:  ep,
+			ServerKey: sk,
 		}); err != nil {
 			log.Fatalf("Error marshalling config: %v\n", err)
 		} else {
@@ -69,11 +75,12 @@ func main() {
 			clientIdList = append(clientIdList, keystoreID.ID)
 		}
 		if sjb, err := json.Marshal(&ServerConfig{
-			Port:     port,
-			Endpoint: ep,
-			CertFile: cert,
-			KeyFile:  key,
-			Users:    clientIdList,
+			Port:      port,
+			Endpoint:  ep,
+			CertFile:  cert,
+			KeyFile:   key,
+			Users:     clientIdList,
+			ServerKey: sk,
 		}); err != nil {
 			log.Fatalf("Error marshalling config: %v\n", err)
 		} else {
