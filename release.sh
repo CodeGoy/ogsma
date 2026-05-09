@@ -16,9 +16,9 @@ clients=""
 
 # build required executables
 cd ./config_gen/ || exit
-go build .
+go mod tidy && go build .
 cd ../keystore_gen/ || exit
-go build .
+go mod tidy && go build .
 cd ../
 
 # Generate keystore files for names
@@ -60,20 +60,21 @@ rm ./*.keystore
 # build server
 cp server_config.json ./server/config.json
 cd ./server || exit
-go build .
+go mod tidy && go build .
 rm config.json
 mv "./${programName}_server" ../
 cd ../
 
 # build client for names
+cd ./client || exit
+go mod tidy
 for (( i=0; i<num_names; i++ )); do
     targetName="${names[$i]}"
     echo "building executable for ${targetName}"
-    cp "${targetName}_config.json" ./client/config.json
-    cd ./client || exit
+    cp "../${targetName}_config.json" ./config.json
     go build -o "../${targetName}_${programName}" .
     ANDROID_NDK_HOME="$HOME/Android/android-ndk-r21e" fyne p --release --os android/arm64
     mv ./ogsma.apk "../${targetName}_${programName}.apk"
     rm config.json
-    cd ../
 done
+cd ../
