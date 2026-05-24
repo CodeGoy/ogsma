@@ -192,5 +192,6 @@ func main() {
 	}
 	s.websockets = make(map[string]*websocket.Conn)
 	s.messageQueue = make(map[string][][]byte)
+	log.Printf("Starting server on port %d\n", c.Port)
 	s.start()
 }

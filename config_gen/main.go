@@ -62,7 +62,8 @@ func main() {
 	case "server":
 		var clientIdList []string
 		for _, s := range strings.Split(ukfs, ",") {
-			keystoreFileBytes, err := os.ReadFile(fmt.Sprintf("%s.keyshare", s))
+			// TODO : filename or path flag // ERROR occurs here <----------------------
+			keystoreFileBytes, err := os.ReadFile(fmt.Sprintf("build/%s.keyshare", s))
 			if err != nil {
 				log.Fatalf("Error opening keystore file %s: %v\n", s, err)
 			}
@@ -84,7 +85,7 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Error marshalling config: %v\n", err)
 		} else {
-			if err := os.WriteFile("server_config.json", sjb, 0666); err != nil {
+			if err := os.WriteFile(opf, sjb, 0666); err != nil {
 				log.Fatalf("Error writing server_config.json: %v\n", err)
 			}
 		}

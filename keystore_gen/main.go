@@ -240,7 +240,7 @@ func (e *Encryption) saveKeystore(ks *Keystore) {
 	}
 }
 
-func (e *Encryption) shareKey() {
+func (e *Encryption) shareKey(filename string) {
 	shs := KeyShare{
 		ID:        e.keys.ID,
 		Username:  e.keys.Username,
@@ -251,7 +251,8 @@ func (e *Encryption) shareKey() {
 		log.Printf("Error marshaling keyshare: %v\n", err)
 	}
 	// fmt.Printf("%s\n", jsonBytes)
-	if err := os.WriteFile(fmt.Sprintf("%s.keyshare", e.keys.Username), jsonBytes, 0600); err != nil {
+	// TODO : output filename
+	if err := os.WriteFile(fmt.Sprintf("%s", filename), jsonBytes, 0600); err != nil {
 		log.Printf("Error writing keyshare: %v\n", err)
 	}
 }
@@ -286,7 +287,7 @@ func (e *Encryption) printKeys() {
 }
 
 func main() {
-	var password, contactKeyFile, newUsername, keyStoreFilename string
+	var password, contactKeyFile, newUsername, keyStoreFilename, keyshareFilename string
 	var printKeys, test bool
 	flag.BoolVar(&test, "test", false, "test flag")
 	flag.BoolVar(&printKeys, "print", false, "print keys")
@@ -294,6 +295,7 @@ func main() {
 	flag.StringVar(&newUsername, "new", "", "New user name")
 	flag.StringVar(&contactKeyFile, "add", "", "path to contact key file")
 	flag.StringVar(&keyStoreFilename, "keystore", "", "path to keystore file")
+	flag.StringVar(&keyshareFilename, "keyshare", "", "path to keyshare file")
 	flag.Parse()
 	e := &Encryption{
 		password:     password,
@@ -311,8 +313,9 @@ func main() {
 	}
 	if len(contactKeyFile) > 0 {
 		e.addContactFromFile(contactKeyFile)
+		return
 	}
-	e.shareKey()
+	e.shareKey(keyshareFilename)
 	if test {
 		e.targetPublicKey = e.keys.PublicKey
 		ciphertext, err := e.publicEncrypt([]byte("hello world, this is ECC public/private key encryption!"))
