@@ -7,9 +7,8 @@ users=("chad:password1234!" "stacy:password1234!" "john:password1234!" "jane:pas
 serverKey="$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 64)"
 echo "building with serverKey: ${serverKey}"
 key="../certs/server.key"
-
+cert="./certs/server.crt"
 buildDir="build/"
-
 mkdir -a "./${buildDir}"
 
 # script vars
