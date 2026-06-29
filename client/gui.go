@@ -23,6 +23,7 @@ type GUI struct {
 	client          *Client
 	enc             *Encryption
 	serverKey       string
+	notification    bool
 }
 
 func (g *GUI) loginWindow() {
@@ -63,6 +64,10 @@ func (g *GUI) loginWindow() {
 			log.Println("tabs option set to", value)
 			g.tabs = value
 		}),
+		widget.NewCheck("notification", func(value bool) {
+			log.Println("notification option set to", value)
+			g.notification = value
+		}),
 	)
 	g.window.SetContent(content)
 }
@@ -79,7 +84,6 @@ func (g *GUI) contactsWindow() {
 		content := container.NewVBox(widget.NewLabel("Contacts"))
 		for _, contact := range g.enc.keys.Contacts {
 			content.Add(widget.NewButton(contact.Username, func() {
-				g.client.targetID = contact.ID
 				g.chatWindow(contact)
 			}))
 			content.Add(widget.NewSeparator())
@@ -106,7 +110,7 @@ func (g *GUI) chatWindow(contact *Contact) {
 				return
 			}
 			jm, err := json.Marshal(&Msg{
-				ID:        g.client.targetID,
+				ID:        contact.ID,
 				TimeStamp: time.Now(),
 				Message:   targetPublicKeyEncryptedBytes,
 				FromID:    g.client.ID,
@@ -136,7 +140,6 @@ func (g *GUI) chatWindow(contact *Contact) {
 		}
 	}
 	backButton := widget.NewButton("back", func() {
-		g.client.targetID = ""
 		g.contactsWindow()
 	})
 	content := container.New(layout.NewBorderLayout(backButton, msgEntry, nil, nil),
@@ -161,7 +164,7 @@ func (g *GUI) chatTab(contact *Contact) *fyne.Container {
 			for {
 				retry++
 				jm, err := json.Marshal(&Msg{
-					ID:        g.client.targetID,
+					ID:        contact.ID,
 					TimeStamp: time.Now(),
 					Message:   targetPublicKeyEncryptedBytes,
 					FromID:    g.client.ID,
@@ -252,7 +255,7 @@ func (g *GUI) listen() {
 		if err != nil {
 			log.Printf("error looking up username: %v", err)
 		}
-		if background {
+		if background && g.notification {
 			fyne.CurrentApp().SendNotification(&fyne.Notification{
 				Title:   fmt.Sprintf("Msg from: %s", username),
 				Content: fmt.Sprintf("%s", string(decryptedMessage)),

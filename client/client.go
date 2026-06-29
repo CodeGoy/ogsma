@@ -12,7 +12,6 @@ import (
 
 type Client struct {
 	ID          string
-	targetID    string
 	Conn        *websocket.Conn
 	Addr        string
 	SelfSigned  bool // SelfSigned Disables checking CA store for cert

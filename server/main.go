@@ -83,7 +83,6 @@ func (s *Server) start() {
 			log.Printf("Error reading init message: %v\n", err)
 			return
 		}
-		// handle init message // TODO : decrypt
 		if pmt == websocket.BinaryMessage {
 			prs := struct {
 				ID string `json:"id"`
@@ -96,6 +95,7 @@ func (s *Server) start() {
 				log.Printf("Error parsing init message: %v\n", err)
 			}
 			if len(prs.ID) != 64 {
+				log.Printf("Error ID length != 64: %v\n", prs.ID)
 				return
 			}
 			if !slices.Contains(s.users, prs.ID) {
