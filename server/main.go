@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -39,6 +39,7 @@ type Server struct {
 	users        []string
 	serverKey    string
 	enc          *Encryption
+	mut          sync.Mutex
 }
 
 type MessageTemplate struct {
@@ -56,19 +57,15 @@ func (s *Server) processMessage(msg []byte) ([]byte, error) {
 	return s.enc.passwordDecrypt(msg, s.serverKey)
 }
 
+func (s *Server) removeConnection(userID string) {
+	s.mut.Lock()
+	delete(s.websockets, userID)
+	s.mut.Unlock()
+}
+
 func (s *Server) start() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
-		pll := r.ContentLength
-		if pll > 0 {
-			bytes, err := io.ReadAll(r.Body)
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Printf("Payload: %s\n", string(bytes))
-		}
-		http.Redirect(w, r, "https://youtu.be/dQw4w9WgXcQ", http.StatusMovedPermanently) // ROFL
-		return
+		w.Write([]byte("404"))
 	})
 	http.HandleFunc(fmt.Sprintf("/%s", s.endpoint), func(w http.ResponseWriter, r *http.Request) {
 		var currentUserID string
@@ -103,13 +100,16 @@ func (s *Server) start() {
 				return
 			}
 			currentUserID = prs.ID
+			s.mut.Lock()
 			s.websockets[prs.ID] = c
+			s.mut.Unlock()
 			log.Printf("User  %s Connected from %s\n", prs.ID, r.RemoteAddr)
 		} else {
 			log.Printf("Error parsing init message: %v\n", string(pm))
 			return
 		}
 		websocketTimeout := time.Now()
+		// set ping handler
 		c.SetPingHandler(func(m string) error {
 			websocketTimeout = time.Now()
 			if err := c.WriteMessage(websocket.PongMessage, []byte("pong")); err != nil {
@@ -117,30 +117,35 @@ func (s *Server) start() {
 			}
 			return nil
 		})
+
 		go func() {
 			for {
 				if time.Now().Sub(websocketTimeout) > time.Second*3 {
 					log.Printf("removing websocket session for %s\n", currentUserID)
-					delete(s.websockets, currentUserID)
+					s.removeConnection(currentUserID)
 					return
 				}
 			}
 		}()
-		if val, ok := s.messageQueue[currentUserID]; ok {
-			for i := 0; i < len(val); i++ {
-				if err := s.websockets[currentUserID].WriteMessage(websocket.TextMessage, val[i]); err != nil {
+		s.mut.Lock()
+		mq, ok := s.messageQueue[currentUserID]
+		s.mut.Unlock()
+		if ok {
+			s.mut.Lock()
+			for i := 0; i < len(mq); i++ {
+				if err := s.websockets[currentUserID].WriteMessage(websocket.TextMessage, mq[i]); err != nil {
 					log.Printf("Error writing message: %v\n", err)
-					return
+					break
 				}
 			}
 			delete(s.messageQueue, currentUserID)
+			s.mut.Unlock()
 		}
 		for {
 			messageType, message, err := c.ReadMessage()
 			if err != nil {
-				log.Printf("Error reading message: %v\n", err)
 				log.Printf("removing websocket session for %s\n", currentUserID)
-				delete(s.websockets, currentUserID)
+				s.removeConnection(currentUserID)
 				return
 			}
 			switch messageType {
@@ -155,13 +160,20 @@ func (s *Server) start() {
 					log.Printf("Error parsing message: %v\n", err)
 					return
 				}
-				if value, ok := s.websockets[mt.ID]; ok {
-					if err := value.WriteMessage(messageType, message); err != nil {
+				s.mut.Lock()
+				wc, ok := s.websockets[mt.ID]
+				s.mut.Unlock()
+				if ok {
+					s.mut.Lock()
+					if err := wc.WriteMessage(messageType, message); err != nil {
 						log.Printf("Error writing message: %v\n", err)
-						return
 					}
+					s.mut.Unlock()
+					break
 				} else {
+					s.mut.Lock()
 					s.messageQueue[mt.ID] = append(s.messageQueue[mt.ID], message)
+					s.mut.Unlock()
 				}
 			default:
 				fmt.Printf("Unused message type: %v\n", messageType)
