@@ -27,7 +27,7 @@ type GUI struct {
 }
 
 func (g *GUI) loginWindow() {
-	g.window.SetTitle("websocket-chat-gui")
+	g.window.SetTitle("OGSMA")
 	messageLabel := widget.NewLabel("")
 	passEntry := widget.NewPasswordEntry()
 	passEntry.SetPlaceHolder("Password")
@@ -39,7 +39,8 @@ func (g *GUI) loginWindow() {
 		}
 		g.client.ID = g.enc.keys.ID
 		if err := g.client.Connect(); err != nil {
-			log.Fatal(err)
+			messageLabel.SetText(fmt.Sprintf("Unable to contact server:\n %v", err))
+			return
 		}
 		for _, contact := range g.enc.keys.Contacts {
 			g.chatOutput[contact.ID] = widget.NewRichText()
@@ -52,11 +53,11 @@ func (g *GUI) loginWindow() {
 		login()
 	}
 	////////////
-	passEntry.SetText("password1234!") // set password
+	// passEntry.SetText("password1234!")
 	////////////
 	loginButton := widget.NewButton("Login", login)
 	content := container.NewVBox(
-		widget.NewLabel(fmt.Sprintf("Hello %s, Please log in")),
+		widget.NewLabel(fmt.Sprintf("Login")),
 		passEntry,
 		loginButton,
 		messageLabel,

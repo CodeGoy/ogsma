@@ -14,7 +14,7 @@ type Client struct {
 	ID          string
 	Conn        *websocket.Conn
 	Addr        string
-	SelfSigned  bool // SelfSigned Disables checking CA store for cert
+	SelfSigned  bool // SelfSigned Disables checking CA store for cert // TODO : check cert manually
 	wsPath      string
 	MessageChan chan []byte
 	serverKey   string
@@ -31,7 +31,7 @@ func (c *Client) Connect() error {
 	dd.HandshakeTimeout = 5 * time.Second
 	c.Conn, _, err = dd.Dial(fmt.Sprintf("wss://%s/%s", c.Addr, c.wsPath), nil)
 	if err != nil {
-		return fmt.Errorf("dial: %v", err)
+		return err
 	}
 	c.listener()
 	mts := struct {
