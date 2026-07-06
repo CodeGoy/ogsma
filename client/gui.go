@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -100,43 +99,40 @@ type Msg struct {
 	FromID    string    `json:"from"`
 }
 
+func (g *GUI) sendMessage(contact *Contact, msg string) {
+	targetPublicKeyEncryptedBytes, err := g.enc.publicEncrypt([]byte(msg), contact.PublicKey)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	jm, err := json.Marshal(&Msg{
+		ID:        contact.ID,
+		TimeStamp: time.Now(),
+		Message:   targetPublicKeyEncryptedBytes,
+		FromID:    g.client.ID,
+	})
+	if err != nil {
+		log.Printf("error: json marshal: %v", err)
+		return
+	}
+	encryptedMessage, err := g.enc.passwordEncrypt(jm, g.serverKey)
+	if err != nil {
+		log.Printf("error: json encrypt: %v", err)
+		return
+	}
+	if err := g.client.SendMsg(encryptedMessage); err != nil {
+		log.Println(err)
+		g.appendText("Error:", err.Error(), contact.ID, true)
+	}
+	g.appendText(g.enc.keys.Username, msg, contact.ID, true)
+}
+
 func (g *GUI) chatWindow(contact *Contact) {
 	g.window.SetTitle("messaging")
 	msgEntry := widget.NewEntry()
 	msgEntry.OnSubmitted = func(s string) {
 		if len(s) > 0 {
-			targetPublicKeyEncryptedBytes, err := g.enc.publicEncrypt([]byte(msgEntry.Text), contact.PublicKey)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			jm, err := json.Marshal(&Msg{
-				ID:        contact.ID,
-				TimeStamp: time.Now(),
-				Message:   targetPublicKeyEncryptedBytes,
-				FromID:    g.client.ID,
-			})
-			if err != nil {
-				log.Printf("error: json marshal: %v", err)
-				return
-			}
-			encryptedMessage, err := g.enc.passwordEncrypt(jm, g.serverKey)
-			if err != nil {
-				log.Printf("error: json encrypt: %v", err)
-				return
-			}
-			if err := g.client.SendMsg(encryptedMessage); err != nil {
-				log.Println(err)
-				g.appendText("Error:", err.Error(), contact.ID)
-				if err := g.client.Connect(); err != nil {
-					g.appendText("Error:", "Failed to reconnect to server", contact.ID)
-					g.appendText("Error:", err.Error(), contact.ID)
-					time.Sleep(5 * time.Second)
-					// TODO : fix this
-					os.Exit(1)
-				}
-			}
-			g.appendText(g.enc.keys.Username, msgEntry.Text, contact.ID)
+			g.sendMessage(contact, msgEntry.Text)
 			msgEntry.SetText("")
 		}
 	}
@@ -156,40 +152,7 @@ func (g *GUI) chatTab(contact *Contact) *fyne.Container {
 	msgEntry := widget.NewEntry()
 	msgEntry.OnSubmitted = func(s string) {
 		if len(s) > 0 {
-			targetPublicKeyEncryptedBytes, err := g.enc.publicEncrypt([]byte(msgEntry.Text), contact.PublicKey)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			retry := 0
-			for {
-				retry++
-				jm, err := json.Marshal(&Msg{
-					ID:        contact.ID,
-					TimeStamp: time.Now(),
-					Message:   targetPublicKeyEncryptedBytes,
-					FromID:    g.client.ID,
-				})
-				if err != nil {
-					log.Printf("error: json marshal: %v", err)
-					return
-				}
-				encryptedMessage, err := g.enc.passwordEncrypt(jm, g.serverKey)
-				if err != nil {
-					log.Printf("error: json encrypt: %v", err)
-					return
-				}
-				if err := g.client.SendMsg(encryptedMessage); err == nil {
-					break
-				}
-				if retry > 16 {
-					log.Printf("Failed to send message to %v: %v", contact.ID, err)
-					g.appendText("ERROR:", "failed to send message", contact.ID)
-					return
-				}
-				time.Sleep(250 * time.Millisecond)
-			}
-			g.appendText(g.enc.keys.Username, msgEntry.Text, contact.ID)
+			g.sendMessage(contact, msgEntry.Text)
 			msgEntry.SetText("")
 		}
 	}
@@ -199,10 +162,14 @@ func (g *GUI) chatTab(contact *Contact) *fyne.Container {
 	)
 }
 
-func (g *GUI) appendText(prefix, content any, id string) {
+func (g *GUI) appendText(prefix, content any, id string, self bool) {
 	go func() {
 		fyne.DoAndWait(func() {
-			g.chatOutput[id].AppendMarkdown(fmt.Sprintf("%v: %v", prefix, content))
+			if self {
+				g.chatOutput[id].AppendMarkdown(fmt.Sprintf(`* %v`, content))
+			} else {
+				g.chatOutput[id].AppendMarkdown(fmt.Sprintf("%v: %v", prefix, content))
+			}
 			g.chatOutput[id].AppendMarkdown("---")
 			g.scrollContainer[id].ScrollToBottom()
 			g.chatOutput[id].Refresh()
@@ -263,9 +230,9 @@ func (g *GUI) listen() {
 			})
 		}
 		if since > time.Second*5 {
-			g.appendText(fmt.Sprintf("%s %v:", username, since), string(decryptedMessage), nms.FromID)
+			g.appendText(fmt.Sprintf("%s %v:", username, since), string(decryptedMessage), nms.FromID, false)
 		} else {
-			g.appendText(username, string(decryptedMessage), nms.FromID)
+			g.appendText(username, string(decryptedMessage), nms.FromID, false)
 		}
 	}
 }
