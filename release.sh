@@ -80,7 +80,8 @@ for (( i=0; i<num_users; i++ )); do
     name="${USER[0]}"
     echo "building executable for ${name}"
     cp "../${buildDir}${name}_config.json" ./config.json
-    go build -o "../${buildDir}${name}_${programName}" .
+    fyne build -o "../${buildDir}${name}_${programName}" .
+    # go build -o "../${buildDir}${name}_${programName}" .
     ANDROID_NDK_HOME="$HOME/Android/android-ndk-r21e" fyne p --release --os android/arm64
     mv ./ogsma.apk "../${buildDir}${name}_${programName}.apk"
     rm config.json
