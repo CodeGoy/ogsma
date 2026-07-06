@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"slices"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -108,25 +107,13 @@ func (s *Server) start() {
 			log.Printf("Error parsing init message: %v\n", string(pm))
 			return
 		}
-		websocketTimeout := time.Now()
 		// set ping handler
 		c.SetPingHandler(func(m string) error {
-			websocketTimeout = time.Now()
 			if err := c.WriteMessage(websocket.PongMessage, []byte("pong")); err != nil {
 				return errors.New("websocket pong: " + err.Error())
 			}
 			return nil
 		})
-
-		go func() {
-			for {
-				if time.Now().Sub(websocketTimeout) > time.Second*3 {
-					log.Printf("removing websocket session for %s\n", currentUserID)
-					s.removeConnection(currentUserID)
-					return
-				}
-			}
-		}()
 		s.mut.Lock()
 		mq, ok := s.messageQueue[currentUserID]
 		s.mut.Unlock()
